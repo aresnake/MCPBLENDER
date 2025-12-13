@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 from typing import Any, Dict, Optional
 
-from mcp import FastMCP
+from mcp.server.fastmcp import FastMCP
 from mcp.server import stdio
 
 from mcpblender_server.bridge_client import BridgeClient
