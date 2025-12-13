@@ -6,7 +6,14 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any, Dict, Optional
 
-from mcpblender_addon import actions
+from mcpblender_addon.snapshot.light_snapshot import make_light_snapshot
+
+
+def _safe(fn, default=None):
+    try:
+        return fn()
+    except Exception:
+        return default
 
 
 class _Handler(BaseHTTPRequestHandler):
@@ -14,48 +21,59 @@ class _Handler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
 
     def _send_json(self, payload: Dict[str, Any], status: int = 200) -> None:
-        body = json.dumps(payload).encode("utf-8")
+        try:
+            body = json.dumps(payload).encode("utf-8")
+        except Exception:
+            body = b'{"ok": false, "error": {"code": "serialization_error"}}'
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
-        self.wfile.write(body)
+        try:
+            self.wfile.write(body)
+        except Exception:
+            pass
 
     def log_message(self, fmt: str, *args: Any) -> None:  # pragma: no cover - quiet handler
         return
 
     def do_GET(self):  # noqa: N802
-        if self.path != "/health":
-            self._send_json({"ok": False, "request_id": "health", "error": {"code": "not_found", "message": "Unknown path"}}, status=404)
-            return
         try:
-            payload = actions.blender_health()
-            response = actions.build_response(True, "health", payload)
-        except Exception as exc:  # pragma: no cover - Blender runtime only
-            response = actions.build_response(False, "health", error={"code": "health_error", "message": str(exc)})
-        self._send_json(response)
+            if self.path != "/health":
+                self._send_json({"ok": False, "error": {"code": "not_found", "message": "Unknown path"}}, status=404)
+                return
+            self._send_json({"ok": True, "source": "mcpblender_bridge"})
+        except Exception:
+            self._send_json({"ok": False, "error": {"code": "internal_error", "message": "GET failed"}}, status=500)
 
     def do_POST(self):  # noqa: N802
         if self.path != "/rpc":
-            self._send_json({"ok": False, "request_id": "rpc", "error": {"code": "not_found", "message": "Unknown path"}}, status=404)
+            self._send_json({"ok": False, "error": {"code": "not_found", "message": "Unknown path"}}, status=404)
             return
 
-        length = int(self.headers.get("Content-Length", "0"))
-        body = self.rfile.read(length)
-        request_id = "bridge"
+        length = _safe(lambda: int(self.headers.get("Content-Length", "0")), 0)
+        body = self.rfile.read(length) if length > 0 else b""
         try:
             payload = json.loads(body.decode("utf-8")) if body else {}
-            request_id = payload.get("request_id") or request_id
-            tool = payload.get("tool")
-            args = payload.get("args", {}) or {}
-            response = actions.dispatch_tool(tool, args, request_id)
+        except Exception:
+            payload = {}
+
+        method = payload.get("method")
+        params = payload.get("params") or {}
+
+        if method != "scene.snapshot":
+            self._send_json({"ok": False, "error": {"code": "invalid_method", "message": "Unsupported method"}}, status=400)
+            return
+
+        try:
+            snapshot = make_light_snapshot()
+            self._send_json({"ok": True, "data": snapshot}, status=200)
         except Exception as exc:  # pragma: no cover - defensive
-            response = actions.build_response(False, request_id, error={"code": "bridge_error", "message": str(exc)})
-        self._send_json(response, status=200 if response.get("ok") else 500)
+            self._send_json({"ok": False, "error": {"code": "snapshot_error", "message": str(exc)}}, status=500)
 
 
 class BridgeServer:
-    def __init__(self, host: str = "127.0.0.1", port: int = 8765) -> None:
+    def __init__(self, host: str = "127.0.0.1", port: int = 9876) -> None:
         self.address = (host, port)
         self._server = ThreadingHTTPServer(self.address, _Handler)
         self._thread: Optional[threading.Thread] = None
@@ -67,30 +85,29 @@ class BridgeServer:
         self._thread.start()
 
     def stop(self) -> None:
-        self._server.shutdown()
+        try:
+            self._server.shutdown()
+        except Exception:
+            pass
         if self._thread is not None:
             self._thread.join(timeout=1)
 
 
-def launch_server(host: str = "127.0.0.1", port: int = 8765) -> BridgeServer:
+def launch_server(host: str = "127.0.0.1", port: int = 9876) -> BridgeServer:
     server = BridgeServer(host=host, port=port)
-    if not actions.HAS_BPY:
-        raise RuntimeError("Blender (bpy) is required to start the bridge HTTP server")
     server.start()
+    print(f"[MCPBLENDER] Bridge started on http://{host}:{port}", flush=True)
     return server
 
 
 def main() -> None:  # pragma: no cover - Blender runtime only
-    if not actions.HAS_BPY:
-        print("bpy not available; run from inside Blender")
-        return
     server = launch_server()
-    print(f"Bridge running on http://{server.address[0]}:{server.address[1]}")
     try:
         while True:
             time.sleep(1)
     except KeyboardInterrupt:
         server.stop()
+        print("[MCPBLENDER] Bridge stopped", flush=True)
 
 
 if __name__ == "__main__":  # pragma: no cover

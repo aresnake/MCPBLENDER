@@ -18,12 +18,19 @@ def register() -> None:  # pragma: no cover - Blender runtime only
     global _bridge_server
     from .bridge_http.server import launch_server
 
-    if _bridge_server is None:
-        _bridge_server = launch_server()
+    try:
+        if _bridge_server is None:
+            _bridge_server = launch_server(host="127.0.0.1", port=9876)
+    except Exception as exc:
+        print(f"[MCPBLENDER] Failed to start bridge: {exc}", flush=True)
 
 
 def unregister() -> None:  # pragma: no cover - Blender runtime only
     global _bridge_server
-    if _bridge_server is not None:
-        _bridge_server.stop()
-        _bridge_server = None
+    try:
+        if _bridge_server is not None:
+            _bridge_server.stop()
+            _bridge_server = None
+            print("[MCPBLENDER] Bridge stopped", flush=True)
+    except Exception as exc:
+        print(f"[MCPBLENDER] Failed to stop bridge: {exc}", flush=True)
