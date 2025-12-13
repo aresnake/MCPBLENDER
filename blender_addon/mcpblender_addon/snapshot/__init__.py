@@ -1,3 +1,6 @@
-from .light_snapshot import capture_snapshot
+# blender_addon/mcpblender_addon/snapshot/__init__.py
+# Public snapshot API (canonical)
+from .light_snapshot import make_light_snapshot
 
-__all__ = ["capture_snapshot"]
+# Backward-compat alias (older imports)
+capture_snapshot = make_light_snapshot
