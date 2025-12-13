@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 from typing import Any, Dict, Optional
 
 from mcp.server.fastmcp import FastMCP
@@ -85,8 +86,46 @@ def _build_mcp(bridge: Optional[BridgeClient] = None) -> FastMCP:
 
 async def _serve_stdio() -> None:
     mcp = _build_mcp()
-    async with stdio.serve(mcp):
+    if hasattr(mcp, "run_stdio_async"):
+        await mcp.run_stdio_async()
         await asyncio.Future()
+        return
+    if hasattr(mcp, "run"):
+        # Some SDKs expose run(transport="stdio")
+        maybe = mcp.run("stdio")  # type: ignore[arg-type]
+        if inspect.isawaitable(maybe):
+            await maybe
+        await asyncio.Future()
+        return
+    ctx = None
+    run_coro = None
+
+    if hasattr(stdio, "serve"):
+        ctx = stdio.serve(mcp)
+    elif hasattr(stdio, "stdio_server"):
+        ctx = stdio.stdio_server(mcp)
+    elif hasattr(stdio, "run"):
+        run_coro = stdio.run(mcp)
+    elif hasattr(stdio, "serve_stdio"):
+        ctx = stdio.serve_stdio(mcp)
+    else:
+        raise RuntimeError(f"Unsupported mcp.server.stdio API: {dir(stdio)}")
+
+    if ctx is not None:
+        if inspect.isawaitable(ctx):
+            await ctx
+            return
+        if hasattr(ctx, "__aenter__") and hasattr(ctx, "__aexit__"):
+            async with ctx:
+                await asyncio.Future()
+            return
+        raise RuntimeError(f"Unsupported stdio context type: {type(ctx)}")
+
+    if run_coro is not None:
+        await run_coro
+        return
+
+    raise RuntimeError("Failed to start stdio server")
 
 
 def main() -> None:  # pragma: no cover - runtime entry
