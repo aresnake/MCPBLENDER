@@ -1,0 +1,2 @@
+[console_scripts]
+mcpblender-server = mcpblender_server.server:main

@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mcpblender-core"
+version = "0.1.0"
+description = "MCPBLENDER Core MCP server and Blender addon bridge"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=7.4"]
+
+[tool.setuptools]
+package-dir = {"" = "server_mcp/src"}
+
+[tool.setuptools.packages.find]
+where = ["server_mcp/src"]
+
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["tests"]
+pythonpath = ["server_mcp/src"]
