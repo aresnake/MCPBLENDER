@@ -1,1 +1,0 @@
-mcpblender_server
