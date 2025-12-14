@@ -13,3 +13,7 @@ __pycache__/
 .vscode/
 # Packaging artifacts
 *.egg-info/
+
+# Local debug scripts
+debug_*.py
+
