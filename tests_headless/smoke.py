@@ -31,9 +31,17 @@ def main() -> int:
         cube_name = cube_data.get("name") or "SmokeCube"
         print(f"Created cube {cube_name}")
 
+        snap = rpc("scene.snapshot", {"limit": 200})
+        names = [obj.get("name") for obj in snap.get("objects", [])]
+        print(f"Snapshot count: {len(names)}")
+        print(f"Cube present in snapshot: {cube_name in names}")
+        smoke_names = [n for n in names if n and "Smoke" in n]
+        print(f"Names containing 'Smoke': {smoke_names[:10] if smoke_names else names[:10]}")
+
         # Validate retrieval by name/id via scenegraph.get
         resolved = rpc("scenegraph.get", {"name": cube_name})
         if not resolved or resolved.get("name") != cube_name:
+            print(f"scenegraph.get failed; snapshot contained: {names[:10]}")
             print("Failed to resolve cube by name via scenegraph.get")
             return 1
 
