@@ -23,4 +23,4 @@ where = ["server_mcp/src"]
 [tool.pytest.ini_options]
 addopts = "-q"
 testpaths = ["tests"]
-pythonpath = ["server_mcp/src"]
+pythonpath = ["server_mcp/src", "blender_addon"]

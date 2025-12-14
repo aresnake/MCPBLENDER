@@ -6,13 +6,14 @@ from typing import Any, Dict
 try:  # pragma: no cover - Blender runtime only
     import bpy
     import bmesh
-    from mathutils import Euler, Vector
+    from mathutils import Euler, Matrix, Vector
 
     HAS_BPY = True
 except ImportError:  # pragma: no cover - Blender runtime only
     bpy = None
     bmesh = None
     Euler = None
+    Matrix = None
     Vector = None
     HAS_BPY = False
 
@@ -128,12 +129,16 @@ def transform_object(args: Dict[str, Any]) -> Dict[str, Any]:  # pragma: no cove
         vec = Vector(location)
         if space == "world":
             obj.matrix_world.translation = vec
+            obj.location = vec
         else:
             obj.location = vec
     if rotation is not None:
         eul = Euler(rotation)
         if space == "world":
-            obj.matrix_world.to_euler().rotate(eul)
+            translation = getattr(obj.matrix_world, "translation", Vector(obj.location))
+            current_scale = obj.matrix_world.to_scale() if hasattr(obj.matrix_world, "to_scale") else obj.scale
+            obj.rotation_euler = eul
+            obj.matrix_world = Matrix.LocRotScale(translation, eul, current_scale)
         else:
             obj.rotation_euler = eul
     if scale is not None:

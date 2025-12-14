@@ -27,10 +27,10 @@ class ToolRegistry:
         return response
 
     def dispatch(self, request: ToolRequest) -> ResponsePayload:
-        self.state.record_request(request.request_id, request.tool)
-        handler = self._tools.get(request.tool)
+        self.state.record_request(request.request_id, request.method)
+        handler = self._tools.get(request.method)
         if handler is None:
-            return error_response(request.request_id, "tool_not_found", f"Tool '{request.tool}' is not registered")
+            return error_response(request.request_id, "tool_not_found", f"Method '{request.method}' is not registered")
         try:
             return handler(request)
         except Exception as exc:  # pragma: no cover - defensive path

@@ -26,21 +26,6 @@ class BridgeClient:
         except Exception as exc:
             return {"ok": False, "error": {"code": "bridge_unreachable", "message": str(exc)}}
 
-    def rpc(self, tool: str, args: Dict[str, Any], request_id: str) -> Dict[str, Any]:
-        payload = json.dumps({"tool": tool, "args": args or {}, "request_id": request_id}).encode("utf-8")
-
-        def op() -> Dict[str, Any]:
-            req = urllib.request.Request(
-                f"{self.base_url}/rpc",
-                data=payload,
-                headers={"Content-Type": "application/json"},
-                method="POST",
-            )
-            with urllib.request.urlopen(req, timeout=self.timeout) as resp:
-                return json.loads(resp.read().decode("utf-8"))
-
-        return self._with_retries(op)
-
     def call_rpc(self, method: str, params: Dict[str, Any]) -> Dict[str, Any]:
         payload = json.dumps({"method": method, "params": params or {}}).encode("utf-8")
 

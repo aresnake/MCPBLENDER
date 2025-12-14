@@ -73,8 +73,8 @@ def error_response(request_id: str, code: str, message: str, details: Any = None
 
 @dataclass
 class ToolRequest:
-    tool: str
-    args: Dict[str, Any]
+    method: str
+    params: Dict[str, Any]
     request_id: str
 
     @classmethod
@@ -82,18 +82,18 @@ class ToolRequest:
         payload = json.loads(raw)
         if not isinstance(payload, dict):
             raise ValueError("Tool request must be a JSON object")
-        tool = payload.get("tool")
-        if not isinstance(tool, str) or not tool:
-            raise ValueError("Tool name is required")
-        args = payload.get("args", {})
-        if args is None:
-            args = {}
-        if not isinstance(args, dict):
-            raise ValueError("Tool args must be a JSON object")
+        method = payload.get("method")
+        if not isinstance(method, str) or not method:
+            raise ValueError("method is required")
+        params = payload.get("params", {})
+        if params is None:
+            params = {}
+        if not isinstance(params, dict):
+            raise ValueError("params must be a JSON object")
         request_id = payload.get("request_id")
         if not isinstance(request_id, str) or not request_id:
             raise ValueError("request_id is required")
-        return cls(tool=tool, args=args, request_id=request_id)
+        return cls(method=method, params=params, request_id=request_id)
 
     def to_json(self) -> str:
-        return json.dumps({"tool": self.tool, "args": self.args, "request_id": self.request_id})
+        return json.dumps({"method": self.method, "params": self.params, "request_id": self.request_id})

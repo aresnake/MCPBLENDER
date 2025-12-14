@@ -11,15 +11,15 @@ def main() -> int:
     with BridgeClient() as bridge:
         registry = build_registry(bridge)
         calls = [
-            ToolRequest(tool="scene.snapshot", args={}, request_id="demo-1"),
-            ToolRequest(tool="object.create_cube", args={"name": "DemoCube", "size": 1.0}, request_id="demo-2"),
-            ToolRequest(tool="object.move_object", args={"name": "DemoCube", "delta": (1, 0, 0)}, request_id="demo-3"),
+            ToolRequest(method="scene.snapshot", params={}, request_id="demo-1"),
+            ToolRequest(method="object.create_cube", params={"name": "DemoCube", "size": 1.0}, request_id="demo-2"),
+            ToolRequest(method="object.move_object", params={"name": "DemoCube", "delta": (1, 0, 0)}, request_id="demo-3"),
             ToolRequest(
-                tool="material.assign_simple",
-                args={"name": "DemoCube", "material_name": "DemoMat", "base_color": [0.2, 0.6, 1.0, 1.0]},
+                method="material.assign_simple",
+                params={"name": "DemoCube", "material_name": "DemoMat", "base_color": [0.2, 0.6, 1.0, 1.0]},
                 request_id="demo-4",
             ),
-            ToolRequest(tool="scene.snapshot", args={}, request_id="demo-5"),
+            ToolRequest(method="scene.snapshot", params={}, request_id="demo-5"),
         ]
         for req in calls:
             resp = registry.dispatch(req)

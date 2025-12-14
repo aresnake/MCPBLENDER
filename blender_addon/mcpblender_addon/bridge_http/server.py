@@ -6,6 +6,7 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any, Dict, Optional
 
+from mcpblender_addon.actions import scenegraph_get, scenegraph_search, transform_object
 from mcpblender_addon.snapshot.light_snapshot import make_light_snapshot
 
 try:  # pragma: no cover - Blender runtime only
@@ -58,6 +59,22 @@ def _rpc_scene_snapshot() -> Dict[str, Any]:
         return {"ok": True, "data": snapshot}
     except Exception as exc:  # pragma: no cover - defensive
         return _make_error("snapshot_error", str(exc))
+
+
+def _rpc_scenegraph_search(params: Dict[str, Any]) -> Dict[str, Any]:  # pragma: no cover - Blender runtime only
+    try:
+        result = scenegraph_search(params or {})
+        return {"ok": True, "data": result}
+    except Exception as exc:
+        return _make_error("scenegraph_error", str(exc))
+
+
+def _rpc_scenegraph_get(params: Dict[str, Any]) -> Dict[str, Any]:  # pragma: no cover - Blender runtime only
+    try:
+        result = scenegraph_get(params or {})
+        return {"ok": True, "data": result}
+    except Exception as exc:
+        return _make_error("scenegraph_error", str(exc))
 
 
 def _rpc_object_create_cube(params: Dict[str, Any]) -> Dict[str, Any]:  # pragma: no cover - Blender runtime only
@@ -126,6 +143,14 @@ def _rpc_object_move(params: Dict[str, Any]) -> Dict[str, Any]:  # pragma: no co
         }
     except Exception as exc:
         return _make_error("move_error", str(exc))
+
+
+def _rpc_object_transform(params: Dict[str, Any]) -> Dict[str, Any]:  # pragma: no cover - Blender runtime only
+    try:
+        result = transform_object(params or {})
+        return {"ok": True, "data": result}
+    except Exception as exc:
+        return _make_error("transform_error", str(exc))
 
 
 def _rpc_material_assign(params: Dict[str, Any]) -> Dict[str, Any]:  # pragma: no cover - Blender runtime only
@@ -214,7 +239,8 @@ class _Handler(BaseHTTPRequestHandler):
         try:
             payload = json.loads(body.decode("utf-8")) if body else {}
         except Exception:
-            payload = {}
+            self._send_json({"ok": False, "error": {"code": "invalid_payload", "message": "Body must be JSON"}}, status=400)
+            return
 
         method = payload.get("method")
         params = payload.get("params") or {}
@@ -223,7 +249,10 @@ class _Handler(BaseHTTPRequestHandler):
             "scene.snapshot": _rpc_scene_snapshot,
             "object.create_cube": lambda: _rpc_object_create_cube(params),
             "object.move_object": lambda: _rpc_object_move(params),
+            "object.transform": lambda: _rpc_object_transform(params),
             "material.assign_simple": lambda: _rpc_material_assign(params),
+            "scenegraph.search": lambda: _rpc_scenegraph_search(params),
+            "scenegraph.get": lambda: _rpc_scenegraph_get(params),
         }
 
         handler = handlers.get(method)

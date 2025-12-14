@@ -11,12 +11,12 @@ def main() -> int:
     with BridgeClient() as bridge:
         registry = build_registry(bridge)
         sequence = [
-            ToolRequest(tool="core.ping", args={}, request_id="demo-1"),
-            ToolRequest(tool="blender.health", args={}, request_id="demo-2"),
-            ToolRequest(tool="scene.snapshot", args={"limit": 4}, request_id="demo-3"),
-            ToolRequest(tool="object.create_cube", args={"name": "DemoCube", "size": 1.5}, request_id="demo-4"),
-            ToolRequest(tool="object.transform", args={"name": "DemoCube", "location": (1, 1, 1)}, request_id="demo-5"),
-            ToolRequest(tool="scene.snapshot", args={"limit": 6}, request_id="demo-6"),
+            ToolRequest(method="core.ping", params={}, request_id="demo-1"),
+            ToolRequest(method="blender.health", params={}, request_id="demo-2"),
+            ToolRequest(method="scene.snapshot", params={"limit": 4}, request_id="demo-3"),
+            ToolRequest(method="object.create_cube", params={"name": "DemoCube", "size": 1.5}, request_id="demo-4"),
+            ToolRequest(method="object.transform", params={"name": "DemoCube", "location": (1, 1, 1)}, request_id="demo-5"),
+            ToolRequest(method="scene.snapshot", params={"limit": 6}, request_id="demo-6"),
         ]
         for request in sequence:
             response = registry.dispatch(request)

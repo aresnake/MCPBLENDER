@@ -29,14 +29,14 @@ class FakeBridge:
 
 def test_core_ping():
     registry = build_registry(FakeBridge())
-    response = registry.dispatch(ToolRequest(tool="core.ping", args={}, request_id="r1"))
+    response = registry.dispatch(ToolRequest(method="core.ping", params={}, request_id="r1"))
     assert response.ok
     assert response.data["message"] == "pong"
 
 
 def test_unknown_tool():
     registry = build_registry(FakeBridge())
-    response = registry.dispatch(ToolRequest(tool="not.real", args={}, request_id="r2"))
+    response = registry.dispatch(ToolRequest(method="not.real", params={}, request_id="r2"))
     assert not response.ok
     assert response.error.code == "tool_not_found"
 
@@ -45,11 +45,11 @@ def test_proxy_to_bridge_and_diagnostics():
     state = ServerState()
     bridge = FakeBridge()
     registry = build_registry(bridge, state=state)
-    response = registry.dispatch(ToolRequest(tool="scenegraph.search", args={"query": "Cube"}, request_id="r3"))
+    response = registry.dispatch(ToolRequest(method="scenegraph.search", params={"query": "Cube"}, request_id="r3"))
     assert response.ok
-    assert bridge.rpc_calls[0][0] == "scenegraph.search"
+    assert bridge.call_rpc_calls[0][0] == "scenegraph.search"
 
-    diag = registry.dispatch(ToolRequest(tool="diagnostics.tail", args={}, request_id="diag"))
+    diag = registry.dispatch(ToolRequest(method="diagnostics.tail", params={}, request_id="diag"))
     assert diag.ok
     assert "r3" in diag.data["recent_request_ids"]
 
@@ -57,7 +57,7 @@ def test_proxy_to_bridge_and_diagnostics():
 def test_bridge_error_passthrough():
     bridge = FakeBridge(fail=True)
     registry = build_registry(bridge)
-    response = registry.dispatch(ToolRequest(tool="blender.health", args={}, request_id="r4"))
+    response = registry.dispatch(ToolRequest(method="blender.health", params={}, request_id="r4"))
     assert not response.ok
     assert response.error.code == "unavailable"
 
@@ -65,7 +65,7 @@ def test_bridge_error_passthrough():
 def test_scene_snapshot_call_rpc():
     bridge = FakeBridge()
     registry = build_registry(bridge)
-    response = registry.dispatch(ToolRequest(tool="scene.snapshot", args={}, request_id="snap"))
+    response = registry.dispatch(ToolRequest(method="scene.snapshot", params={}, request_id="snap"))
     assert response.ok
     assert bridge.call_rpc_calls[0][0] == "scene.snapshot"
     assert response.data["method"] == "scene.snapshot"
@@ -75,7 +75,7 @@ def test_object_move_object_success():
     bridge = FakeBridge()
     registry = build_registry(bridge)
     response = registry.dispatch(
-        ToolRequest(tool="object.move_object", args={"id": "123", "delta": [1, 0, 0]}, request_id="move1")
+        ToolRequest(method="object.move_object", params={"id": "123", "delta": [1, 0, 0]}, request_id="move1")
     )
     assert response.ok
     assert bridge.call_rpc_calls[-1][0] == "object.move_object"
@@ -86,7 +86,7 @@ def test_material_assign_simple_failure():
     bridge = FakeBridge(fail=True)
     registry = build_registry(bridge)
     response = registry.dispatch(
-        ToolRequest(tool="material.assign_simple", args={"name": "Cube"}, request_id="mat1")
+        ToolRequest(method="material.assign_simple", params={"name": "Cube"}, request_id="mat1")
     )
     assert not response.ok
     assert response.error.code == "unavailable"
