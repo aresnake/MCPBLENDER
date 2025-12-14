@@ -74,6 +74,8 @@ def scenegraph_get(args: Dict[str, Any]) -> Dict[str, Any]:  # pragma: no cover 
         raise ValueError("id or name is required")
     obj = bpy.data.objects.get(identifier)
     if obj is None:
+        obj = bpy.context.scene.objects.get(identifier) if hasattr(bpy.context, "scene") else None
+    if obj is None:
         obj = bpy.data.objects.get(str(identifier))
     if obj is None:
         raise LookupError(f"Object {identifier} not found")
@@ -102,6 +104,7 @@ def create_cube(args: Dict[str, Any]) -> Dict[str, Any]:  # pragma: no cover - B
     obj.rotation_euler = Euler(rotation)
     obj.scale = Vector(scale)
 
+    _update_view_layer()
     return _object_payload(obj)
 
 
@@ -145,6 +148,7 @@ def transform_object(args: Dict[str, Any]) -> Dict[str, Any]:  # pragma: no cove
         scl = Vector(scale)
         obj.scale = scl
 
+    _update_view_layer()
     return _object_payload(obj)
 
 
@@ -157,6 +161,7 @@ def delete_object(args: Dict[str, Any]) -> Dict[str, Any]:  # pragma: no cover -
     if obj is None:
         raise LookupError(f"Object {name} not found")
     bpy.data.objects.remove(obj, do_unlink=True)
+    _update_view_layer()
     return {"deleted": name}
 
 
@@ -208,4 +213,13 @@ def assign_material_simple(args: Dict[str, Any]) -> Dict[str, Any]:  # pragma: n
     else:
         slots[0] = mat
 
+    _update_view_layer()
     return {"material_name": mat.name, "object": obj.name}
+
+
+def _update_view_layer() -> None:  # pragma: no cover - Blender runtime only
+    try:
+        if bpy and bpy.context and bpy.context.view_layer:
+            bpy.context.view_layer.update()
+    except Exception:
+        pass

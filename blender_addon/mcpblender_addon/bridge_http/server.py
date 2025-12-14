@@ -26,6 +26,7 @@ BRIDGE_VERSION = "1.0.3"
 MAX_BODY_BYTES = 1_048_576  # 1 MB
 TIMEOUT_SECONDS = 2.5
 START_TIME = time.monotonic()
+BPY_LOCK = threading.RLock()
 
 
 def _safe(fn, default=None):
@@ -197,7 +198,8 @@ def handle_rpc_bytes(body: bytes) -> Dict[str, Any]:
 
     start = time.monotonic()
     try:
-        result = handler()
+        with BPY_LOCK:
+            result = handler()
     except Exception as exc:  # pragma: no cover - defensive
         return _make_error("internal_error", str(exc))
 
