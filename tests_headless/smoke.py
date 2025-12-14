@@ -12,6 +12,7 @@ ADDON_ROOT = ROOT / "blender_addon"
 sys.path.insert(0, str(ADDON_ROOT))
 
 from mcpblender_addon.actions import create_cube, transform_object, capture_snapshot, HAS_BPY  # noqa: E402
+from mcpblender_addon.actions import scenegraph_get  # noqa: E402
 
 
 def main() -> int:
@@ -21,9 +22,34 @@ def main() -> int:
     try:
         first_snapshot = capture_snapshot({"limit": 5})
         print(f"Initial snapshot objects: {len(first_snapshot['objects'])}")
+
         cube = create_cube({"name": "SmokeCube", "size": 1.0, "location": (0, 0, 0)})
         print(f"Created cube {cube['name']}")
-        transform_object({"name": cube["name"], "location": (2, 0, 0), "space": "world"})
+
+        # Validate retrieval by name/id
+        resolved = scenegraph_get({"name": cube["name"]})
+        if not resolved or resolved.get("name") != cube["name"]:
+            print("Failed to resolve cube by name via scenegraph_get")
+            return 1
+
+        # Local transform check
+        before_local = scenegraph_get({"name": cube["name"]})
+        transform_object({"name": cube["name"], "rotation": (0.1, 0.0, 0.0), "space": "local"})
+        after_local = scenegraph_get({"name": cube["name"]})
+        if before_local.get("rotation") == after_local.get("rotation"):
+            print("Local rotation did not change")
+            return 1
+
+        # World transform check (also position change)
+        transform_object({"name": cube["name"], "location": (2, 0, 0), "rotation": (0.0, 0.1, 0.0), "space": "world"})
+        after_world = scenegraph_get({"name": cube["name"]})
+        if after_world.get("location") == after_local.get("location"):
+            print("World location did not change")
+            return 1
+        if after_world.get("rotation") == after_local.get("rotation"):
+            print("World rotation did not change")
+            return 1
+
         second_snapshot = capture_snapshot({"limit": 5})
         print(f"Second snapshot objects: {len(second_snapshot['objects'])}")
         return 0

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Callable, TYPE_CHECKING
 
-from mcpblender_server.schema import ResponsePayload, success_response
+from mcpblender_server.schema import ResponsePayload, error_response, success_response
 
 if TYPE_CHECKING:  # pragma: no cover
     from mcpblender_server.server import ToolRegistry
@@ -28,7 +28,10 @@ def register_tools(registry: "ToolRegistry") -> None:
 
     def call(method: str) -> Callable[["ToolRequest"], ResponsePayload]:
         def handler(request: "ToolRequest") -> ResponsePayload:
-            raw = bridge.call_rpc(method, request.params)
+            try:
+                raw = bridge.call_rpc(method, request.params)
+            except Exception as exc:
+                return error_response(request.request_id, "bridge_unreachable", str(exc))
             return registry.response_from_bridge(raw, request.request_id)
 
         return handler
