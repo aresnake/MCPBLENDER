@@ -146,3 +146,66 @@ def transform_object(args: Dict[str, Any]) -> Dict[str, Any]:  # pragma: no cove
         obj.scale = scl
 
     return _object_payload(obj)
+
+
+def delete_object(args: Dict[str, Any]) -> Dict[str, Any]:  # pragma: no cover - Blender runtime only
+    _require_bpy()
+    name = args.get("name") or args.get("object")
+    if not name:
+        raise ValueError("name is required")
+    obj = bpy.data.objects.get(name)
+    if obj is None:
+        raise LookupError(f"Object {name} not found")
+    bpy.data.objects.remove(obj, do_unlink=True)
+    return {"deleted": name}
+
+
+def assign_material_simple(args: Dict[str, Any]) -> Dict[str, Any]:  # pragma: no cover - Blender runtime only
+    _require_bpy()
+    target_name = args.get("object") or args.get("name")
+    if not target_name:
+        raise ValueError("object (name) is required")
+    obj = bpy.data.objects.get(target_name)
+    if obj is None:
+        raise LookupError(f"Object {target_name} not found")
+    if obj.type != "MESH":
+        raise ValueError("Material assignment requires mesh object")
+
+    mat_name = args.get("material_name") or args.get("name") or "Mat"
+    color = args.get("color") or args.get("base_color") or [0.8, 0.8, 0.8, 1.0]
+    if len(color) == 3:
+        color = [*color, 1.0]
+
+    mat = bpy.data.materials.get(mat_name)
+    if mat is None:
+        mat = bpy.data.materials.new(mat_name)
+
+    try:
+        mat.use_nodes = True
+        tree = mat.node_tree
+        principled = None
+        output = None
+        if tree:
+            for node in tree.nodes:
+                if node.type == "BSDF_PRINCIPLED":
+                    principled = node
+                if node.type == "OUTPUT_MATERIAL":
+                    output = node
+            if principled is None:
+                principled = tree.nodes.new("ShaderNodeBsdfPrincipled")
+            if output is None:
+                output = tree.nodes.new("ShaderNodeOutputMaterial")
+            principled.inputs["Base Color"].default_value = color
+            if not principled.outputs["BSDF"].is_linked:
+                tree.links.new(principled.outputs["BSDF"], output.inputs["Surface"])
+    except Exception:
+        if hasattr(mat, "diffuse_color"):
+            mat.diffuse_color = color
+
+    slots = obj.data.materials
+    if not slots:
+        slots.append(mat)
+    else:
+        slots[0] = mat
+
+    return {"material_name": mat.name, "object": obj.name}

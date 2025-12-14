@@ -4,9 +4,11 @@ from typing import Any, Dict
 
 from .core_actions import (
     HAS_BPY,
+    assign_material_simple,
     blender_health,
     capture_snapshot,
     create_cube,
+    delete_object,
     scenegraph_get,
     scenegraph_search,
     transform_object,
@@ -14,9 +16,11 @@ from .core_actions import (
 
 __all__ = [
     "HAS_BPY",
+    "assign_material_simple",
     "blender_health",
     "capture_snapshot",
     "create_cube",
+    "delete_object",
     "scenegraph_get",
     "scenegraph_search",
     "transform_object",
@@ -41,6 +45,8 @@ def dispatch_tool(tool: str, args: Dict[str, Any], request_id: str) -> Dict[str,
         "scenegraph.get": scenegraph_get,
         "object.create_cube": create_cube,
         "object.transform": transform_object,
+        "object.delete": delete_object,
+        "material.assign_simple": assign_material_simple,
     }
     func = mapping.get(tool)
     if func is None:

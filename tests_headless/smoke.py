@@ -11,8 +11,14 @@ ROOT = Path(__file__).resolve().parent.parent
 ADDON_ROOT = ROOT / "blender_addon"
 sys.path.insert(0, str(ADDON_ROOT))
 
-from mcpblender_addon.actions import create_cube, transform_object, capture_snapshot, HAS_BPY  # noqa: E402
-from mcpblender_addon.actions import scenegraph_get  # noqa: E402
+from mcpblender_addon.actions import (  # noqa: E402
+    HAS_BPY,
+    assign_material_simple,
+    create_cube,
+    delete_object,
+    scenegraph_get,
+    transform_object,
+)
 
 
 def main() -> int:
@@ -20,9 +26,6 @@ def main() -> int:
         print("bpy not available; run inside Blender")
         return 1
     try:
-        first_snapshot = capture_snapshot({"limit": 5})
-        print(f"Initial snapshot objects: {len(first_snapshot['objects'])}")
-
         cube = create_cube({"name": "SmokeCube", "size": 1.0, "location": (0, 0, 0)})
         print(f"Created cube {cube['name']}")
 
@@ -50,8 +53,23 @@ def main() -> int:
             print("World rotation did not change")
             return 1
 
-        second_snapshot = capture_snapshot({"limit": 5})
-        print(f"Second snapshot objects: {len(second_snapshot['objects'])}")
+        # Assign material and validate
+        mat_resp = assign_material_simple({"object": cube["name"], "name": "SmokeMat", "color": [0.2, 0.4, 0.8, 1.0]})
+        if mat_resp.get("material_name") != "SmokeMat":
+            print("Material assignment failed")
+            return 1
+        resolved_after_mat = scenegraph_get({"name": cube["name"]})
+        if resolved_after_mat is None:
+            print("Object missing after material assignment")
+            return 1
+
+        # Delete cube and validate disappearance
+        delete_object({"name": cube["name"]})
+        after_delete = scenegraph_get({"name": cube["name"]})
+        if after_delete:
+            print("Object not deleted")
+            return 1
+
         return 0
     except Exception as exc:  # pragma: no cover - Blender runtime only
         print(f"Smoke test failed: {exc}")

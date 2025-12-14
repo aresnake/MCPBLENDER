@@ -42,6 +42,7 @@ def register_tools(registry: "ToolRegistry") -> None:
     registry.register("object.create_cube", call("object.create_cube"))
     registry.register("object.move_object", call("object.move_object"))
     registry.register("object.transform", call("object.transform"))
+    registry.register("object.delete", call("object.delete"))
     registry.register("material.assign_simple", call("material.assign_simple"))
 
     registry.register(

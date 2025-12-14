@@ -28,8 +28,13 @@ See `docs/TOOLS_CORE.md` for full list. Key methods:
 - `scene.snapshot`
 - `scenegraph.search`, `scenegraph.get`
 - `object.create_cube`, `object.move_object`, `object.transform`
+- `object.delete`
 - `material.assign_simple`
 - `diagnostics.tail` (server diagnostics only)
+
+### Example /rpc payloads
+- Delete object: `{"method": "object.delete", "params": {"name": "Cube"}}`
+- Assign material: `{"method": "material.assign_simple", "params": {"object": "Cube", "name": "Mat", "color": [0.8,0.2,0.2,1.0]}}`
 
 ## Development
 - Tests: `pytest -q`

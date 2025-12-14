@@ -7,6 +7,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any, Callable, Dict, Optional
 
 from mcpblender_addon.actions import scenegraph_get, scenegraph_search, transform_object
+from mcpblender_addon.actions import assign_material_simple, delete_object
 from mcpblender_addon.snapshot.light_snapshot import make_light_snapshot
 
 try:  # pragma: no cover - Blender runtime only
@@ -164,6 +165,7 @@ def _handler_map(params: Dict[str, Any]) -> Dict[str, Callable[[], Dict[str, Any
         "object.create_cube": lambda: _rpc_object_create_cube(params),
         "object.move_object": lambda: _rpc_object_move(params),
         "object.transform": lambda: _rpc_object_transform(params),
+        "object.delete": lambda: _rpc_object_delete(params),
         "material.assign_simple": lambda: _rpc_material_assign(params),
         "scenegraph.search": lambda: _rpc_scenegraph_search(params),
         "scenegraph.get": lambda: _rpc_scenegraph_get(params),
@@ -223,48 +225,20 @@ def health_payload() -> Dict[str, Any]:
 
 def _rpc_material_assign(params: Dict[str, Any]) -> Dict[str, Any]:  # pragma: no cover - Blender runtime only
     try:
-        obj = _resolve_object(params)
-        if obj is None:
-            return _make_error("not_found", "Object not found")
-        if obj.type != "MESH":
-            return _make_error("invalid_target", "Material assignment requires mesh object")
-
-        mat_name = params.get("material_name") or "Material"
-        base_color = params.get("base_color") or [0.8, 0.8, 0.8, 1.0]
-        metallic = float(params.get("metallic", 0.0))
-        roughness = float(params.get("roughness", 0.5))
-
-        _ensure_bpy()
-        mat = bpy.data.materials.get(mat_name)
-        if mat is None:
-            mat = bpy.data.materials.new(mat_name)
-        try:
-            mat.use_nodes = True
-            tree = mat.node_tree
-            principled = None
-            if tree:
-                for node in tree.nodes:
-                    if node.type == "BSDF_PRINCIPLED":
-                        principled = node
-                        break
-                if principled is None:
-                    principled = tree.nodes.new("ShaderNodeBsdfPrincipled")
-                principled.inputs["Base Color"].default_value = base_color
-                principled.inputs["Metallic"].default_value = metallic
-                principled.inputs["Roughness"].default_value = roughness
-        except Exception:
-            # Fallback: set simple attributes when node setup not available
-            if hasattr(mat, "diffuse_color"):
-                mat.diffuse_color = base_color
-
-        if not obj.data.materials:
-            obj.data.materials.append(mat)
-        else:
-            obj.data.materials[0] = mat
-
-        return {"ok": True, "data": {"material_name": mat.name}}
+        result = assign_material_simple(params or {})
+        return {"ok": True, "data": result}
     except Exception as exc:
         return _make_error("material_error", str(exc))
+
+
+def _rpc_object_delete(params: Dict[str, Any]) -> Dict[str, Any]:  # pragma: no cover - Blender runtime only
+    try:
+        result = delete_object(params or {})
+        return {"ok": True, "data": result}
+    except LookupError as exc:
+        return _make_error("not_found", str(exc))
+    except Exception as exc:
+        return _make_error("delete_error", str(exc))
 
 
 class _Handler(BaseHTTPRequestHandler):

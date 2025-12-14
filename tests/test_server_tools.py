@@ -90,3 +90,13 @@ def test_material_assign_simple_failure():
     )
     assert not response.ok
     assert response.error.code == "unavailable"
+
+
+def test_object_delete_forwards_call():
+    bridge = FakeBridge()
+    registry = build_registry(bridge)
+    response = registry.dispatch(
+        ToolRequest(method="object.delete", params={"name": "Cube"}, request_id="del1")
+    )
+    assert response.ok
+    assert bridge.call_rpc_calls[-1][0] == "object.delete"
