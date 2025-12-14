@@ -6,8 +6,15 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any, Callable, Dict, Optional
 
-from mcpblender_addon.actions import scenegraph_get, scenegraph_search, transform_object
-from mcpblender_addon.actions import assign_material_simple, delete_object
+from mcpblender_addon.actions.core_actions import (
+    assign_material_simple,
+    capture_snapshot,
+    create_cube,
+    delete_object,
+    scenegraph_get,
+    scenegraph_search,
+    transform_object,
+)
 from mcpblender_addon.snapshot.light_snapshot import make_light_snapshot
 
 try:  # pragma: no cover - Blender runtime only
@@ -62,7 +69,7 @@ def _resolve_object(params: Dict[str, Any]):
 
 def _rpc_scene_snapshot() -> Dict[str, Any]:
     try:
-        snapshot = make_light_snapshot()
+        snapshot = capture_snapshot({})
         return {"ok": True, "data": snapshot}
     except Exception as exc:  # pragma: no cover - defensive
         return _make_error("snapshot_error", str(exc))
@@ -86,68 +93,21 @@ def _rpc_scenegraph_get(params: Dict[str, Any]) -> Dict[str, Any]:  # pragma: no
 
 def _rpc_object_create_cube(params: Dict[str, Any]) -> Dict[str, Any]:  # pragma: no cover - Blender runtime only
     try:
-        _ensure_bpy()
-        name = params.get("name") or "Cube"
-        size = float(params.get("size", 2.0))
-        location = params.get("location") or (0.0, 0.0, 0.0)
-
-        mesh = bpy.data.meshes.new(f"{name}_mesh")
-        try:
-            bm = bmesh.new()
-            bmesh.ops.create_cube(bm, size=size)
-            bm.to_mesh(mesh)
-            bm.free()
-        except Exception:
-            mesh.from_pydata(
-                [
-                    (-size, -size, -size),
-                    (-size, -size, size),
-                    (-size, size, -size),
-                    (-size, size, size),
-                    (size, -size, -size),
-                    (size, -size, size),
-                    (size, size, -size),
-                    (size, size, size),
-                ],
-                [],
-                [
-                    (0, 1, 3, 2),
-                    (4, 6, 7, 5),
-                    (0, 4, 5, 1),
-                    (2, 3, 7, 6),
-                    (0, 2, 6, 4),
-                    (1, 5, 7, 3),
-                ],
-            )
-            mesh.update()
-
-        obj = bpy.data.objects.new(name, mesh)
-        bpy.context.scene.collection.objects.link(obj)
-        obj.location = Vector(location)
-        return {"ok": True, "data": {"id": str(obj.as_pointer()), "name": obj.name}}
+        result = create_cube(params or {})
+        return {"ok": True, "data": result}
     except Exception as exc:
         return _make_error("create_cube_error", str(exc))
 
 
 def _rpc_object_move(params: Dict[str, Any]) -> Dict[str, Any]:  # pragma: no cover - Blender runtime only
     try:
-        obj = _resolve_object(params)
-        if obj is None:
-            return _make_error("not_found", "Object not found")
-
-        location = params.get("location")
-        delta = params.get("delta")
-        if location is not None:
-            obj.location = Vector(location)
-        elif delta is not None:
-            obj.location = obj.location + Vector(delta)
-        else:
-            return _make_error("invalid_params", "location or delta required")
-
-        return {
-            "ok": True,
-            "data": {"id": str(obj.as_pointer()), "name": obj.name, "location": [round(float(v), 6) for v in obj.location[:3]]},
-        }
+        result = transform_object(
+            {
+                **(params or {}),
+                "space": params.get("space") or "world",
+            }
+        )
+        return {"ok": True, "data": result}
     except Exception as exc:
         return _make_error("move_error", str(exc))
 
