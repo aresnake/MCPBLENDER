@@ -11,14 +11,8 @@ ROOT = Path(__file__).resolve().parent.parent
 ADDON_ROOT = ROOT / "blender_addon"
 sys.path.insert(0, str(ADDON_ROOT))
 
-from mcpblender_addon.actions import (  # noqa: E402
-    HAS_BPY,
-    assign_material_simple,
-    create_cube,
-    delete_object,
-    scenegraph_get,
-    transform_object,
-)
+from mcpblender_addon.actions import HAS_BPY  # noqa: E402
+from mcpblender_addon.bridge_http.server import dispatch_rpc  # noqa: E402
 
 
 def main() -> int:
@@ -26,26 +20,34 @@ def main() -> int:
         print("bpy not available; run inside Blender")
         return 1
     try:
-        cube = create_cube({"name": "SmokeCube", "size": 1.0, "location": (0, 0, 0)})
-        print(f"Created cube {cube['name']}")
+        def rpc(method: str, params: dict):
+            resp = dispatch_rpc(method, params)
+            if not resp.get("ok"):
+                print(f"RPC {method} failed: {resp}")
+                raise SystemExit(1)
+            return resp.get("data")
 
-        # Validate retrieval by name/id
-        resolved = scenegraph_get({"name": cube["name"]})
-        if not resolved or resolved.get("name") != cube["name"]:
-            print("Failed to resolve cube by name via scenegraph_get")
+        cube_data = rpc("object.create_cube", {"name": "SmokeCube", "size": 1.0, "location": (0, 0, 0)})
+        cube_name = cube_data.get("name") or "SmokeCube"
+        print(f"Created cube {cube_name}")
+
+        # Validate retrieval by name/id via scenegraph.get
+        resolved = rpc("scenegraph.get", {"name": cube_name})
+        if not resolved or resolved.get("name") != cube_name:
+            print("Failed to resolve cube by name via scenegraph.get")
             return 1
 
         # Local transform check
-        before_local = scenegraph_get({"name": cube["name"]})
-        transform_object({"name": cube["name"], "rotation": (0.1, 0.0, 0.0), "space": "local"})
-        after_local = scenegraph_get({"name": cube["name"]})
+        before_local = rpc("scenegraph.get", {"name": cube_name})
+        rpc("object.transform", {"name": cube_name, "rotation": (0.1, 0.0, 0.0), "space": "local"})
+        after_local = rpc("scenegraph.get", {"name": cube_name})
         if before_local.get("rotation") == after_local.get("rotation"):
             print("Local rotation did not change")
             return 1
 
         # World transform check (also position change)
-        transform_object({"name": cube["name"], "location": (2, 0, 0), "rotation": (0.0, 0.1, 0.0), "space": "world"})
-        after_world = scenegraph_get({"name": cube["name"]})
+        rpc("object.transform", {"name": cube_name, "location": (2, 0, 0), "rotation": (0.0, 0.1, 0.0), "space": "world"})
+        after_world = rpc("scenegraph.get", {"name": cube_name})
         if after_world.get("location") == after_local.get("location"):
             print("World location did not change")
             return 1
@@ -54,20 +56,30 @@ def main() -> int:
             return 1
 
         # Assign material and validate
-        mat_resp = assign_material_simple({"object": cube["name"], "name": "SmokeMat", "color": [0.2, 0.4, 0.8, 1.0]})
+        mat_resp = rpc("material.assign_simple", {"object": cube_name, "name": "SmokeMat", "color": [0.2, 0.4, 0.8, 1.0]})
         if mat_resp.get("material_name") != "SmokeMat":
             print("Material assignment failed")
             return 1
-        resolved_after_mat = scenegraph_get({"name": cube["name"]})
+        resolved_after_mat = rpc("scenegraph.get", {"name": cube_name})
         if resolved_after_mat is None:
             print("Object missing after material assignment")
             return 1
 
         # Delete cube and validate disappearance
-        delete_object({"name": cube["name"]})
-        after_delete = scenegraph_get({"name": cube["name"]})
-        if after_delete:
+        rpc("object.delete", {"name": cube_name})
+        try:
+            rpc("scenegraph.get", {"name": cube_name})
             print("Object not deleted")
+            return 1
+        except SystemExit:
+            # Expected failure path; scenegraph.get should error after deletion
+            pass
+
+        # Snapshot to ensure object absence
+        snapshot = rpc("scene.snapshot", {"limit": 10})
+        names = [obj.get("name") for obj in snapshot.get("objects", [])]
+        if cube_name in names:
+            print("Deleted object still present in snapshot")
             return 1
 
         return 0

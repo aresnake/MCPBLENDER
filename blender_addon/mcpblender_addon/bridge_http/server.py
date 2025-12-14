@@ -173,25 +173,8 @@ def _handler_map(params: Dict[str, Any]) -> Dict[str, Callable[[], Dict[str, Any
     }
 
 
-def handle_rpc_bytes(body: bytes) -> Dict[str, Any]:
-    if len(body) > MAX_BODY_BYTES:
-        return _make_error("payload_too_large", "payload exceeds limit")
-
-    try:
-        payload = json.loads(body.decode("utf-8")) if body else {}
-    except Exception:
-        return _make_error("invalid_payload", "Body must be JSON object")
-
-    if not isinstance(payload, dict):
-        return _make_error("invalid_payload", "Body must be JSON object")
-
-    method = payload.get("method")
-    params = payload.get("params") or {}
-
-    if not isinstance(params, dict):
-        return _make_error("invalid_payload", "params must be an object")
-
-    handlers = _handler_map(params)
+def dispatch_rpc(method: str, params: Dict[str, Any]) -> Dict[str, Any]:
+    handlers = _handler_map(params or {})
     handler = handlers.get(method)
     if handler is None:
         return _make_error("tool_not_found", "Unsupported method")
@@ -211,6 +194,27 @@ def handle_rpc_bytes(body: bytes) -> Dict[str, Any]:
         return _make_error("internal_error", "handler returned invalid payload")
 
     return result
+
+
+def handle_rpc_bytes(body: bytes) -> Dict[str, Any]:
+    if len(body) > MAX_BODY_BYTES:
+        return _make_error("payload_too_large", "payload exceeds limit")
+
+    try:
+        payload = json.loads(body.decode("utf-8")) if body else {}
+    except Exception:
+        return _make_error("invalid_payload", "Body must be JSON object")
+
+    if not isinstance(payload, dict):
+        return _make_error("invalid_payload", "Body must be JSON object")
+
+    method = payload.get("method")
+    params = payload.get("params") or {}
+
+    if not isinstance(params, dict):
+        return _make_error("invalid_payload", "params must be an object")
+
+    return dispatch_rpc(method, params)
 
 
 def health_payload() -> Dict[str, Any]:
