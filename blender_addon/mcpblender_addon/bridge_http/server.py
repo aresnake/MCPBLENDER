@@ -4,7 +4,7 @@ import json
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from typing import Any, Dict, Optional
+from typing import Any, Callable, Dict, Optional
 
 from mcpblender_addon.actions import scenegraph_get, scenegraph_search, transform_object
 from mcpblender_addon.snapshot.light_snapshot import make_light_snapshot
@@ -20,6 +20,11 @@ except ImportError:  # pragma: no cover - Blender runtime only
     bmesh = None
     Vector = None
     HAS_BPY = False
+
+BRIDGE_VERSION = "1.0.3"
+MAX_BODY_BYTES = 1_048_576  # 1 MB
+TIMEOUT_SECONDS = 2.5
+START_TIME = time.monotonic()
 
 
 def _safe(fn, default=None):
@@ -153,6 +158,69 @@ def _rpc_object_transform(params: Dict[str, Any]) -> Dict[str, Any]:  # pragma: 
         return _make_error("transform_error", str(exc))
 
 
+def _handler_map(params: Dict[str, Any]) -> Dict[str, Callable[[], Dict[str, Any]]]:
+    return {
+        "scene.snapshot": _rpc_scene_snapshot,
+        "object.create_cube": lambda: _rpc_object_create_cube(params),
+        "object.move_object": lambda: _rpc_object_move(params),
+        "object.transform": lambda: _rpc_object_transform(params),
+        "material.assign_simple": lambda: _rpc_material_assign(params),
+        "scenegraph.search": lambda: _rpc_scenegraph_search(params),
+        "scenegraph.get": lambda: _rpc_scenegraph_get(params),
+    }
+
+
+def handle_rpc_bytes(body: bytes) -> Dict[str, Any]:
+    if len(body) > MAX_BODY_BYTES:
+        return _make_error("payload_too_large", "payload exceeds limit")
+
+    try:
+        payload = json.loads(body.decode("utf-8")) if body else {}
+    except Exception:
+        return _make_error("invalid_payload", "Body must be JSON object")
+
+    if not isinstance(payload, dict):
+        return _make_error("invalid_payload", "Body must be JSON object")
+
+    method = payload.get("method")
+    params = payload.get("params") or {}
+
+    if not isinstance(params, dict):
+        return _make_error("invalid_payload", "params must be an object")
+
+    handlers = _handler_map(params)
+    handler = handlers.get(method)
+    if handler is None:
+        return _make_error("tool_not_found", "Unsupported method")
+
+    start = time.monotonic()
+    try:
+        result = handler()
+    except Exception as exc:  # pragma: no cover - defensive
+        return _make_error("internal_error", str(exc))
+
+    duration = time.monotonic() - start
+    if duration > TIMEOUT_SECONDS:
+        return _make_error("timeout", "operation exceeded timeout")
+
+    if not isinstance(result, dict) or "ok" not in result:
+        return _make_error("internal_error", "handler returned invalid payload")
+
+    return result
+
+
+def health_payload() -> Dict[str, Any]:
+    uptime = time.monotonic() - START_TIME
+    return {
+        "ok": True,
+        "source": "mcpblender_bridge",
+        "version": BRIDGE_VERSION,
+        "uptime_seconds": round(uptime, 3),
+        "blender_version": _safe(lambda: bpy.app.version_string, "unavailable"),
+        "ready": bool(HAS_BPY),
+    }
+
+
 def _rpc_material_assign(params: Dict[str, Any]) -> Dict[str, Any]:  # pragma: no cover - Blender runtime only
     try:
         obj = _resolve_object(params)
@@ -223,48 +291,33 @@ class _Handler(BaseHTTPRequestHandler):
     def do_GET(self):  # noqa: N802
         try:
             if self.path != "/health":
-                self._send_json({"ok": False, "error": {"code": "not_found", "message": "Unknown path"}}, status=404)
+                self._send_json(_make_error("not_found", "Unknown path"), status=404)
                 return
-            self._send_json({"ok": True, "source": "mcpblender_bridge"})
+            self._send_json(health_payload())
         except Exception:
-            self._send_json({"ok": False, "error": {"code": "internal_error", "message": "GET failed"}}, status=500)
+            self._send_json(_make_error("internal_error", "GET failed"), status=500)
 
     def do_POST(self):  # noqa: N802
         if self.path != "/rpc":
-            self._send_json({"ok": False, "error": {"code": "not_found", "message": "Unknown path"}}, status=404)
+            self._send_json(_make_error("not_found", "Unknown path"), status=404)
             return
 
         length = _safe(lambda: int(self.headers.get("Content-Length", "0")), 0)
+        if length > MAX_BODY_BYTES:
+            self._send_json(_make_error("payload_too_large", "payload exceeds limit"), status=413)
+            return
+
         body = self.rfile.read(length) if length > 0 else b""
-        try:
-            payload = json.loads(body.decode("utf-8")) if body else {}
-        except Exception:
-            self._send_json({"ok": False, "error": {"code": "invalid_payload", "message": "Body must be JSON"}}, status=400)
-            return
-
-        method = payload.get("method")
-        params = payload.get("params") or {}
-
-        handlers = {
-            "scene.snapshot": _rpc_scene_snapshot,
-            "object.create_cube": lambda: _rpc_object_create_cube(params),
-            "object.move_object": lambda: _rpc_object_move(params),
-            "object.transform": lambda: _rpc_object_transform(params),
-            "material.assign_simple": lambda: _rpc_material_assign(params),
-            "scenegraph.search": lambda: _rpc_scenegraph_search(params),
-            "scenegraph.get": lambda: _rpc_scenegraph_get(params),
-        }
-
-        handler = handlers.get(method)
-        if handler is None:
-            self._send_json({"ok": False, "error": {"code": "invalid_method", "message": "Unsupported method"}}, status=400)
-            return
-
-        try:
-            result = handler()
-        except Exception as exc:  # pragma: no cover - defensive
-            result = _make_error("internal_error", str(exc))
-        self._send_json(result, status=200 if result.get("ok") else 500)
+        result = handle_rpc_bytes(body)
+        status = 200 if result.get("ok") else 400
+        error_code = result.get("error", {}).get("code")
+        if error_code == "internal_error":
+            status = 500
+        elif error_code == "timeout":
+            status = 504
+        elif error_code == "payload_too_large":
+            status = 413
+        self._send_json(result, status=status)
 
 
 class BridgeServer:
