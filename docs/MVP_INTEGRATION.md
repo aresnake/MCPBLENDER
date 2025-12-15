@@ -20,6 +20,10 @@ This repo now ships a minimal Blender-coupled HTTP runtime intended for the MVP 
   - `http://127.0.0.1:9876/scene/objects`
 - Responses are printed as pretty JSON envelopes (`{"ok": true|false, ...}`).
 
+## M9 modeling
+- Start the runtime as above, then run `scripts/smoke_modeling_http.ps1` to exercise modeling endpoints.
+- The smoke script posts to `/scene/reset`, adds cube/plane/cylinder, transforms the cube, and finally fetches `/scene/objects` to verify results.
+
 ## Notes
 - Ports: runtime defaults to `127.0.0.1:9876`. MVP core continues on `127.0.0.1:8765`. Adjust with `--host/--port` flags on the Blender runtime if needed.
 - Environment: set `BLENDER_EXE` to override the Blender path used by `run_runtime_http.ps1`.
